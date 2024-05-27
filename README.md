@@ -8,12 +8,34 @@ Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores
 
 ## Funcionalidades ⚙️
 
-- **🌡️ Monitoramento e Controle de Temperatura:** Ajusta automaticamente a temperatura do ar usando exaustores e ar condicionado.
-- **💧 Controle de Umidade:** Mantém a umidade do ar dentro dos níveis ideais.
-- **🐟 Sistema de Aquaponia:** Gerencia bombas de água e sensores de fluxo para garantir um ambiente saudável para os peixes da aquaponia.
-- **🚿 Irrigação Automatizada:** Controla solenóides para irrigar as plantas em intervalos regulares.
-- **💡 Iluminação LED:** Controla os LEDs de cultivo e refletores com base em horários pré-definidos.
-- **🗣️ Integração com Alexa:** Permite comandos de voz para modos de apresentação e controle individual de refletores.
+- ## 🌡️ Monitoramento e Controle de Temperatura:
+
+  - Ajusta automaticamente a temperatura do ar usando exaustores e ar condicionado.
+  - Se a temperatura exceder o limite, ativa os exaustores até atingir a temperatura ideal ou o tempo limite.
+  - Se o tempo limite for excedido sem atingir a temperatura ideal, ativa o ar condicionado.
+- ## 💧 Controle de Umidade:
+
+  - Mantém a umidade do ar dentro dos níveis ideais.
+  - Se a umidade estiver acima do limite, ativa os exaustores até atingir a umidade ideal.
+  - Se o tempo limite for excedido sem atingir a umidade ideal, ativa o ar condicionado no modo desumidificação.
+- ## 🐟 Sistema de Aquaponia:
+
+  - Gerencia bombas de água e sensores de fluxo para garantir um ambiente saudável para os peixes.
+  - Alterna entre duas bombas caso uma falhe.
+  - Mantém o nível da caixa de água usando sensores de nível.
+- ## 🌱 Irrigação Automatizada:
+
+  - Controla solenoides para irrigar as plantas em intervalos regulares.
+- ## 💡 Iluminação LED:
+
+  - Controla os LEDs de cultivo e refletores com base em horários pré-definidos.
+  - Modo de apresentação com LEDs azuis e vermelhos ativados em sequência.
+- ## 🎤 Integração com Alexa:
+
+  - Permite comandos de voz para modos de apresentação e controle individual de refletores.
+- ## 🖥️ Display LCD 16x2 I2C:
+
+  - Exibe dados de temperatura, umidade e atualizações sobre o sistema, como "ligando exaustores" ou "ligando LEDs no modo apresentação".
 
 ## Tecnologias Utilizadas 🛠️
 
