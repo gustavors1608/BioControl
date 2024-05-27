@@ -1,6 +1,6 @@
 # BioControl 🌿
 
-O BioControl é um sistema avançado de automação para fazendas verticais, projetado para criar um ambiente otimizado para o cultivo de plantas. Utilizando tecnologia de ponta como o ESP32 e sensores variados, o sistema gerencia temperatura, umidade, aquaponia, iluminação LED e irrigação de maneira automatizada e precisa. Com integração futura planejada para APIs externas, o BioControl Nexus é ideal para ambientes educacionais e de pesquisa, demonstrando como a tecnologia pode facilitar práticas agrícolas inovadoras.
+O BioControl é um sistema avançado de automação para fazendas verticais, projetado para criar um ambiente otimizado para o cultivo de plantas. Utilizando tecnologia de ponta como o ESP32 e sensores variados, o sistema gerencia temperatura, umidade, aquaponia, iluminação LED e irrigação de maneira automatizada e precisa. Com integração futura planejada para APIs externas, o BioControl Nexus é ideal para ambientes educacionais e de pesquisa (utilizado e projetado para a fazenda vertical da Fasa - Faculdade Santo Ângelo), demonstrando como a tecnologia pode facilitar práticas agrícolas inovadoras.
 
 ## Descrição 📝
 
@@ -57,7 +57,7 @@ Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores
 1. Clone o repositório:
    ```bash
    git clone https://github.com/gustavors1608/BioControl.git
-   ´´´
+   
 2. Abra o projeto no VSCode com o PlatformIO instalado.
 
 3. Conecte os componentes de hardware conforme descrito no diagrama.
@@ -79,4 +79,4 @@ Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para ma
 Em breve ...
 
 ## Contato 📧
-Para mais informações, entre em contato com [seu email].
+Para mais informações, entre em contato com EcoNext@sejafasa.com.br
