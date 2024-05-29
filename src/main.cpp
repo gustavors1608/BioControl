@@ -13,8 +13,7 @@
     temperatura ideal
     - Se a temperatura baixar mais que "T_MIN", Liga o AR na "T_MAX" até atingir A "T_IDEAL" 
 - Controle de umidade do AR 
-    - se umidade acima de X (#DEFINE U-MAX) liga exaustores (RELE) até chegar na umidade ideal ou menos (#DEFINE U_IDEAL)
-    - se passar do Timeout e não baixar até a ideal, Liga o AR no Modo desumidificação
+    - se umidade acima de X (#DEFINE U-MAX) e temperatura ideal, Liga o AR no Modo desumidificação
 - Aquaponia
     - Liga Bomba 1 (#DEFINE PIN-BOMBA...) por 15 minutos e desliga por 15 minuto, 24h por dia
     - Se a bomba 1 estiver ligada e o sensor de fluxo estiver DESLIGADO, A bomba 1 deve ter queimado ou trancado, então usa a bomba 2
@@ -29,29 +28,41 @@
       e por fim vai ligando os 2 AO MESMO TEMPO: AZUL -> VERMELHO -> AZUL+VERMELHO
     - Comando Individual on/off para 4 RELES (Refletone central)
 -----------------------------------------------------------------------------------------------------------------------------------
-DESENVOLVIDO POR: 
+DESENVOLVIDO POR: Gustavo R. Stroschon
 DATA INICIO: 24/05/2024
 DATA ENTREGA V1:
-DATA ULTIMA ATUALIZAÇÃO:
+DATA ULTIMA ATUALIZAÇÃO: 29/05/2024
 
 */
 
 
 #include <Arduino.h>
 #include <Thread.h>
-#include "lcd_extend.cpp"
 #include <DHT.h>
+#include <CronOut.h>
+
+#include "lcd_extend.cpp"
 
 //tempo entre chamadas das threads
 #define T_BOMBA 15*60*1000 // 15 MINUTOS X 60 SEGUNDOS X 1000 MS
 #define T_SOLENOIDE 3000 // 3S
 #define T_DHT 5000
 #define T_LCD 1000
+#define T_DURACAO_IRRIGACAO 1*60*1000 // a cada 30 minutos e a duracao será de 30 minutos ligado, alterar o valor de baixo tbm
+#define N_VEZES_CHAMADA_ENTRE_IRRIG 2 //max 255, a cada N_VEZES_CHAMADA_ENTRE_IRRIG chamadas (cada chamada a cada T_DURACAO_IRRIGACAO) vai irrigar, para descobrir o tempo: N_VEZES_CHAMADA_ENTRE_IRRIG x T_DURACAO_IRRIGACAO / 60 = a cada quantas horas vai irrigar
+#define T_VERIFICAR_EXAUSTOR 60*1000 //1 vez a cada 60 segundos
 
 //configuração de operação
+#define TEMP_MAX 30
 #define TEMP_IDEAL 25
-#define UMID_IDEAL 70
+#define TEMP_MIN 20
+#define TEMP_MARGEM 2
 
+#define UMID_MAX 99
+#define UMID_IDEAL 70
+#define UMID_MIN 30
+
+#define TIMEOUT_EXAUSTORES 30*60*1000 //em Ms
 
 //configuração de pinos
 
@@ -80,11 +91,31 @@ DATA ULTIMA ATUALIZAÇÃO:
 #define PIN_CLOCK_LEDS3 25
 #define PIN_LATCH_LEDS3 26
 
+//classe de controle do ar condicionado
+class AC_CTRL{
+  private:
+    /* data */
+  public:
+    AC_CTRL(/* args */){};
+    void set_temp(byte temp){};
+    void set_desumid(){};
+    void set_normal(){};
+    void on(){};
+    void off(){};
+};
+
 //variavel global que vai servir de base para controlar os shift register
 struct Outs{
   bool bomba1 = false;
   bool bomba2 = false;
   bool solenoide_caixa = false;
+  bool solenoide_irrigacao = false;
+  bool exaustor = false;
+  bool contatora_leds = false;
+  bool refletor1 = false;
+  bool refletor2 = false;
+
+  bool ac = false;
 };
 Outs state;
 
@@ -103,11 +134,19 @@ unsigned long millis_last_bomba = 0;
 //definição dos objetos do tipo thread
 Thread thread_bomba = Thread();
 Thread thread_solenoide = Thread();
+Thread thread_irrigacao = Thread();
 Thread thread_dht = Thread();
 Thread thread_lcd = Thread();
+Thread thread_exaustor = Thread();
 
 //inicializacao do sensor de temperatura do ar e umidade
 DHT dht(PIN_SENSOR_DHT11, DHT11);
+
+//configuraçoes dos timeouts
+CronOut exaustor_timeout(6000,nullptr); // Timeout de 30 minutos sem callback
+
+//controle do ar condicionado
+AC_CTRL ar_condicionado = AC_CTRL();
 
 //inicializacao do lcd
 CtrlLCD lcd(0x27,16,2);
@@ -121,6 +160,8 @@ void code_74hc595(bool data_arr[], byte pin_data, byte pin_clock, byte pin_latch
 void print_bin(byte aByte);
 void main_get_dht();
 void main_lcd();
+void self_test(bool* state);
+void main_irrigacao();
 
 //simbolo personalizado usado para barra de carregamento
 byte bar_char_custom[8] = {
@@ -223,9 +264,86 @@ void main_get_dht(){
 
 }
 
+//a cada 20x tempo liga a irrigacao durante x tempo 
+void main_irrigacao(){
+  static byte vez_de_irrigar = 0;
+  //a cada tantas chamadas em 1 delas mantem ligada até a proxima chamada
+  vez_de_irrigar++;
+
+  if (vez_de_irrigar >= N_VEZES_CHAMADA_ENTRE_IRRIG){
+    vez_de_irrigar = 0;
+    state.solenoide_irrigacao = true;
+  }else{
+    state.solenoide_irrigacao = false;
+  }
+  set_outs();
+}
+
+//verifica se temperatura está ideal
+void main_exaustores(){
+  static bool status_ac = false;
+    if (input.temperatura > TEMP_MAX) {
+      if (state.exaustor == false && status_ac == false) {
+          state.exaustor = true;
+          exaustor_timeout.start();  // reinicia o contador
+      } 
+      /* else if (state.exaustor == true && status_ac == false) {
+          ++;  // incrementa o contador
+      }*/
+    } else if (input.temperatura < TEMP_MIN) {
+      status_ac = true;
+      ar_condicionado.on();
+      ar_condicionado.set_temp(TEMP_MAX - TEMP_MARGEM);  // 28
+    }
+
+    if (exaustor_timeout.hasTimedOut() && input.temperatura > TEMP_MAX) {//se ja ja ta ligado a tempo suficiente, e a temperatura ainda ta acima do maximo, entao liga o ar
+      state.exaustor  = false;
+
+      status_ac = true;
+      ar_condicionado.on();
+      ar_condicionado.set_temp(TEMP_MIN + TEMP_MARGEM);  // 22
+    }
+
+    if (input.temperatura <= (TEMP_MAX - TEMP_MARGEM) && input.temperatura >= (TEMP_MIN + TEMP_MARGEM)) {
+
+      state.exaustor  = false;
+
+      if(input.umidade >= UMID_MAX){
+        ar_condicionado.on();
+        delay(1000);
+        ar_condicionado.set_desumid();
+        status_ac = true;
+      }else{
+        ar_condicionado.on();
+        delay(1000);
+        ar_condicionado.set_normal(); //tira do modo desumidificador
+        delay(1000);
+        ar_condicionado.off();
+        status_ac = false;
+      }
+    }
+
+// ja verifica tambe se deve tomar alguma acao em relacao a umidade
+
+
+}
+
+
+
+
 /**
  * funções de uso geral
 */
+
+//obs, recebe o endereco da variavel de saida, altera o state dela direto na memoria com ponteiro e define as saidas, por que isso? para alterar as saidas sem precisar digitar essas funcoes todas pra cada saida difetrente por cada saida ter um nome diferente
+void self_test(bool* state) {//auto teste para saidas
+  (*state) = true;
+  set_outs();
+  delay(200);//tempo ligado
+  (*state) = false;
+  set_outs();
+  delay(100);//tempo desligado
+}
 
 //atribui ao array os valores que estao na struct de estados das saidas
 void set_outs(){
@@ -234,8 +352,11 @@ void set_outs(){
   array_reles[0] = state.bomba1;
   array_reles[1] = state.bomba2;
   array_reles[2] = state.solenoide_caixa;
-  //... outras saidas
-
+  array_reles[3] = state.solenoide_irrigacao;
+  array_reles[4] = state.contatora_leds;
+  array_reles[5] = state.exaustor;
+  array_reles[6] = state.refletor1;
+  array_reles[7] = state.refletor2;
 
   code_74hc595(array_reles,PIN_DATA_RELES,PIN_CLOCK_RELES,PIN_LATCH_RELES);
 }
@@ -372,7 +493,7 @@ void setup(){
   for (byte i = 0; i < 16; i++){
     lcd.setCursor(i, 1);
     lcd.write(byte(0));
-    delay(400);
+    delay(200);
     lcd.update_scroll(0);
   }
 
@@ -385,7 +506,11 @@ void setup(){
   thread_solenoide.onRun(main_controll_nivel_caixa);
   thread_dht.onRun(main_get_dht);
   thread_lcd.onRun(main_lcd);
+  thread_irrigacao.onRun(main_irrigacao);
+  thread_exaustor.onRun(main_exaustores);
 
+  thread_exaustor.setInterval(T_VERIFICAR_EXAUSTOR);
+  thread_irrigacao.setInterval(T_DURACAO_IRRIGACAO);
 	thread_bomba.setInterval(T_BOMBA);
   thread_solenoide.setInterval(T_SOLENOIDE);
   thread_dht.setInterval(T_DHT);
@@ -393,24 +518,26 @@ void setup(){
 
   //rotinas de testes
   lcd.msg(0,0,"Iniciando testes");
-    //--- liga todas as saidas por 1 segundo
-  state.bomba2 = true;
-  state.bomba1 = true;
-  state.solenoide_caixa = true;
-  set_outs();
 
+  set_outs();//desliga tudo
   delay(1000);
-
-    //--- desliga todas as saidas
-  state.bomba2 = false;
-  state.bomba1 = false;
-  state.solenoide_caixa = false;
-  set_outs();
+  //--- pulsa cada saida
+  self_test(&state.bomba1);  
+  self_test(&state.bomba2);  
+  self_test(&state.solenoide_caixa);  
+  self_test(&state.solenoide_irrigacao);  
+  self_test(&state.contatora_leds);  
+  self_test(&state.exaustor);  
+  self_test(&state.refletor1);  
+  self_test(&state.refletor2);  
+  
+  lcd.clear();
   
   lcd.msg(1,0,"Sistema OK");
+  delay(1000);
 
   lcd.clear();
-
+  
 }
 
 void loop(){
@@ -420,14 +547,18 @@ void loop(){
 		thread_bomba.run();
 	if(thread_solenoide.shouldRun())
 		thread_solenoide.run(); 
+	if(thread_irrigacao.shouldRun())
+		thread_irrigacao.run(); 
   if(thread_dht.shouldRun())
 		thread_dht.run(); 
   if(thread_lcd.shouldRun())
 		thread_lcd.run(); 
+  if(thread_exaustor.shouldRun())
+		thread_exaustor.run(); 
 
   if (Serial.available() > 0) {
     msg_lcd_alert = Serial.readString();
-    msg_lcd_alert.trim();
+    msg_lcd_alert.trim();//retira ultimo caracter da string que foi pela serial
     Serial.println(msg_lcd_alert);
   }
 }
