@@ -1,6 +1,6 @@
 # BioControl 🌿
 
-O BioControl é um sistema avançado de automação para fazendas verticais, projetado para criar um ambiente otimizado para o cultivo de plantas. Utilizando tecnologia de ponta como o ESP32 e sensores variados, o sistema gerencia temperatura, umidade, aquaponia, iluminação LED e irrigação de maneira automatizada e precisa. Com integração futura planejada para APIs externas, o BioControl Nexus é ideal para ambientes educacionais e de pesquisa (utilizado e projetado para a fazenda vertical da Fasa - Faculdade Santo Ângelo), demonstrando como a tecnologia pode facilitar práticas agrícolas inovadoras.
+O BioControl é um sistema avançado de automação para fazendas verticais, projetado para criar um ambiente otimizado para o cultivo de plantas. Utilizando tecnologia de ponta como o ESP32 e sensores diversos, o sistema gerencia temperatura, umidade, aquaponia, iluminação LED e irrigação de maneira automatizada e precisa. Com integração futura planejada para APIs externas, o BioControl Nexus é ideal para ambientes educacionais e de pesquisa (utilizado e projetado para a fazenda vertical da Fasa - Faculdade Santo Ângelo), demonstrando como a tecnologia pode facilitar práticas agrícolas inovadoras.
 
 ## Descrição 📝
 
@@ -8,34 +8,33 @@ Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores
 
 ## Funcionalidades ⚙️
 
-- ## 🌡️ Monitoramento e Controle de Temperatura:
 
-  - Ajusta automaticamente a temperatura do ar usando exaustores e ar condicionado.
-  - Se a temperatura exceder o limite, ativa os exaustores até atingir a temperatura ideal ou o tempo limite.
-  - Se o tempo limite for excedido sem atingir a temperatura ideal, ativa o ar condicionado.
-- ## 💧 Controle de Umidade:
+- **🌡️ Monitoramento e Controle de Temperatura:**
 
-  - Mantém a umidade do ar dentro dos níveis ideais.
-  - Se a umidade estiver acima do limite, ativa os exaustores até atingir a umidade ideal.
-  - Se o tempo limite for excedido sem atingir a umidade ideal, ativa o ar condicionado no modo desumidificação.
-- ## 🐟 Sistema de Aquaponia:
+  - Ajusta a temperatura do ar usando exaustores e ar condicionado, mantendo-a dentro de um intervalo ideal.
+  - Se a temperatura exceder o limite máximo, ativa os exaustores.
+  - Se o tempo limite para atingir a temperatura ideal for excedido, ativa o ar condicionado.
+  - Também ativa o ar condicionado para manter a temperatura dentro da faixa mínima.
+- **💧 Controle de Umidade:**
 
-  - Gerencia bombas de água e sensores de fluxo para garantir um ambiente saudável para os peixes.
-  - Alterna entre duas bombas caso uma falhe.
-  - Mantém o nível da caixa de água usando sensores de nível.
-- ## 🌱 Irrigação Automatizada:
+  - Monitora e controla a umidade do ar, mantendo-a dentro dos níveis ideais.
+  - Se a umidade estiver acima do limite, o sistema ativa o ar condicionado no modo desumidificação.
+- **🐟 Sistema de Aquaponia:**
 
-  - Controla solenoides para irrigar as plantas em intervalos regulares.
-- ## 💡 Iluminação LED:
+  - Gerencia as bombas de água, alternando entre duas bombas caso uma falhe, garantindo o funcionamento do sistema de aquaponia.
+  - Utiliza sensores de nível para manter o nível da caixa de água, acionando um solenoide para reabastecer o nível caso necessário.
+- **🌱 Irrigação Automatizada:**
 
-  - Controla os LEDs de cultivo e refletores com base em horários pré-definidos.
-  - Modo de apresentação com LEDs azuis e vermelhos ativados em sequência.
+  - Controla solenoides para irrigar as plantas em intervalos regulares, com a frequência definida pelo usuário.
+- **💡 Iluminação LED:**
+
+  - Controla LEDs de cultivo e refletores com base em horários pré-definidos, permitindo a simulação de ciclos de luz.
+- **🖥️ Display LCD 16x2 I2C:**
+
+  - Exibe dados de temperatura, umidade e informações sobre o status do sistema, como "ligando exaustores" ou "ligando LEDs no modo apresentação".
 - ## 🎤 Integração com Alexa:
 
   - Permite comandos de voz para modos de apresentação e controle individual de refletores.
-- ## 🖥️ Display LCD 16x2 I2C:
-
-  - Exibe dados de temperatura, umidade e atualizações sobre o sistema, como "ligando exaustores" ou "ligando LEDs no modo apresentação".
 
 ## Tecnologias Utilizadas 🛠️
 
@@ -68,6 +67,13 @@ Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores
 - Configure os parâmetros no código conforme suas necessidades (temperaturas ideais, horários de iluminação, etc.).
 - Utilize o display LCD para monitorar o status do sistema.
 - Comandos de voz via Alexa podem ser configurados no app da mesma para modos de apresentação e controle de refletores de modo individual.
+
+## Próximos Passos ⏭️
+
+- Integração com API externa para monitoramento e controle remoto.
+- Adicionar comandos de voz via Alexa para controle de modos e funcionalidades.
+- Aprimorar a interface do LCD com barra de progresso para a bomba de água.
+- Criar diagrama de hardware detalhado.
 
 ## Contribuições 🤝
 Contribuições são bem-vindas! Por favor, faça um fork do repositório e envie um pull request com suas melhorias.
