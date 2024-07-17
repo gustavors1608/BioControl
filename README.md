@@ -59,7 +59,7 @@ Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores
    
 2. Abra o projeto no VSCode com o PlatformIO instalado.
 
-3. Conecte os componentes de hardware conforme descrito no diagrama.
+3. Conecte os componentes de hardware e configure no programa os pinos do mesmo.
 
 4. Compile e carregue o código no ESP32.
 
