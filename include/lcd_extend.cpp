@@ -28,6 +28,7 @@ class CtrlLCD : public LiquidCrystal_I2C {
     void msg(const byte linha, const byte coluna, const String & txt){
       setCursor(coluna,linha);
       print(txt);
+     // Serial.println(txt);
     }
 
     void set_scroll(byte line, String message) {
@@ -40,7 +41,7 @@ class CtrlLCD : public LiquidCrystal_I2C {
       //position[line] = 0;
     }
 
-    void update_scroll(byte line) {
+    void update_scroll(byte line) {                   
       setCursor(0, line);
       if (size_msg_scroll[line] > 16) {
         //scroling de maneira continua

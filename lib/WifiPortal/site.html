@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang=pt-br>
+  <meta charset=UTF-8>
+  <meta content='width=device-width,initial-scale=1,user-scalable=no' name=viewport>
+  <title>Wifi Portal</title>
+  <style>
+    :root {
+      --letras:#d8d8d8;
+      --destaques: #b521ff;
+      --background:  #595858;
+
+      --logo: 2.3em;
+      --titulo: 1.6em;
+      --texto: 1em;
+      
+    }
+    body ,header{
+      text-align: center;
+      font-size: var(--texto);
+      font-family: ubuntu, sans-serif, Roboto;
+      margin: 0;
+      padding: 0;
+      background-color: var(--background);
+      height: 100%;
+      width: 100%;
+    }
+
+    div {
+      padding: 5px;
+      margin: 6px 0;
+      box-sizing: border-box;
+    }
+
+    .submit,header,body,a {
+      color: var(--letras);
+      text-decoration: none;
+    }
+
+    .wifi_name{
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+
+    .q {
+      height: 16px;
+      margin: 0;
+      padding: 0 5px;
+      text-align: right;
+      min-width: 38px;
+      float: right
+    }
+
+    .q.q-1:after {
+      background-position-x: -16px
+    }
+
+    .q.q-2:after {
+      background-position-x: -32px
+    }
+
+    .q.q-3:after {
+      background-position-x: -48px
+    }
+
+    .q.q-4:after {
+      background-position-x: -64px
+    }
+
+    .q:after,
+    .q:before {
+      content: '';
+      width: 16px;
+      height: 16px;
+      display: inline-block;
+      background-repeat: no-repeat;
+      background-position: 16px 0;
+      background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAAQCAMAAADeZIrLAAAAJFBMVEX///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADHJj5lAAAAC3RSTlMAIjN3iJmqu8zd7vF8pzcAAABsSURBVHja7Y1BCsAwCASNSVo3/v+/BUEiXnIoXkoX5jAQMxTHzK9cVSnvDxwD8bFx8PhZ9q8FmghXBhqA1faxk92PsxvRc2CCCFdhQCbRkLoAQ3q/wWUBqG35ZxtVzW4Ed6LngPyBU2CobdIDQ5oPWI5nCUwAAAAASUVORK5CYII=)
+    }
+
+    svg {
+      margin: .5em .5em -.35em .5em;
+      vertical-align: text-bottom
+    }
+
+    .back_logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%
+    }
+
+    .back_logo,
+    .input_div input {
+      background-color: var(--letras)
+    }
+
+    .logo_txt {
+        font-size: var(--logo);
+    }
+
+    .submit,hr,
+    input, header {
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, .5)
+    }
+
+    .input_div input{
+      padding: 1em;
+      border-radius: .3rem;
+      width: 100%;
+      margin: 2px 0;
+      box-sizing: border-box
+    }
+
+    hr {
+      height: 1px;
+      opacity: 30%;
+      background-color: var(--letras);
+    }
+
+
+    h2,.submit {
+      font-size: var(--titulo);
+    }
+
+    .submit{
+      position: fixed;
+      bottom: 1%;
+      right: 0;
+      padding: .8em;
+      width: 95%;
+      margin: 0 2.5% 0 2.5%;
+      background-color: var(--destaques);
+    }
+
+    .wrap {
+      text-align: left;
+      width: min(400px);
+      margin: auto;
+    }
+
+
+    .popup {
+        display: none; /* Oculto por padrão */
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 20px;
+        background-color: var(--letras);
+        color: var(--background);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        text-align: left;
+    }
+    
+    #overlay {
+        display: none; /* Oculto por padrão */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 500;
+    }
+  </style>
+
+  <body>
+  <header>
+
+
+
+    
+
+        
+  
+
+            
+
+
+  
+ <svg class=back_logo xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="400" height="387.2791519434629" viewBox="0, 0, 400,387.2791519434629"><g id="svgg"><path id="path0" d="M166.784 5.589 C 39.781 28.723,-29.393 162.279,27.659 274.205 C 95.079 406.473,278.977 418.545,361.396 296.113 C 455.040 157.007,333.293 -24.740,166.784 5.589 M234.629 27.555 C 329.461 45.355,391.035 139.253,367.667 230.432 C 331.315 372.266,145.774 406.420,60.761 286.926 C -27.479 162.895,82.399 -1.019,234.629 27.555 M180.357 63.007 C 132.851 69.280,89.560 96.414,61.761 137.341 C 53.328 149.756,52.194 154.097,55.973 159.492 C 62.279 168.496,72.035 166.212,81.056 153.620 C 142.732 67.530,248.667 65.612,317.530 149.339 C 332.366 167.377,340.934 170.028,346.929 158.435 C 350.145 152.215,349.894 151.387,340.621 137.662 C 303.474 82.684,243.370 54.686,180.357 63.007 M181.625 122.224 C 132.233 131.345,75.381 179.928,92.810 198.120 C 99.715 205.328,106.224 203.964,115.776 193.310 C 171.447 131.217,236.099 132.552,289.964 196.907 C 295.232 203.201,303.880 203.758,309.472 198.166 C 315.987 191.651,315.394 186.294,306.922 175.122 C 276.189 134.593,227.030 113.838,181.625 122.224 M188.693 180.380 C 165.326 186.321,145.913 197.994,131.080 215.022 C 120.171 227.546,126.394 240.283,142.738 238.881 C 144.846 238.700,150.035 235.012,155.697 229.670 C 185.527 201.530,216.697 201.170,246.001 228.627 C 258.282 240.135,263.037 242.030,269.722 238.081 C 283.090 230.184,276.473 215.001,251.640 196.588 C 233.703 183.289,205.656 176.067,188.693 180.380 M188.693 243.574 C 147.952 259.547,157.947 317.448,201.413 317.266 C 236.415 317.120,252.952 273.444,226.742 250.372 C 217.376 242.128,200.205 239.060,188.693 243.574 " stroke="none" fill="#000000" fill-rule="evenodd"></path></g></svg>
+ 
+ <span class="logo_txt">BioControl</span>
+<hr>
+ </header>
+    <div class=wrap>
+        <div id="overlay" onclick="hp()"></div>
+
+      <h2>Configurações</h2><hr>
+      
+
+      <div class="wifi_name">
+        <a onclick="c(this)" href='#p'><span>{wifi_n}</span>
+            <div role='img' class='q q-{wifi_c}' onclick="sp('{wifi_id}')"> 
+                <div id="{wifi_id}" class="popup">
+                    <p>Intensidade: {wifi_p}</p><p>Rssi: {wifi_rssi}</p><p>Ssid: '{wifi_n}'</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="wifi_name">
+        <a onclick="c(this)" href='#p'><span>nome rede</span>
+            <div role='img' class='q q-4' onclick="sp('1')"> 
+                <div id="1" class="popup">
+                    <p>Intensidade: 100%</p><p>Rssi: -90db</p><p>Ssid: 'nome rede'</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <br>
+    <form action='wifisave'>
+      <div class='input_div'>
+          <label for='s'>Nome da rede Wi-Fi</label>
+          <br>
+          <input id='s' length='32' name='ssid' placeholder='Digite ou clique no seu Wi-Fi acima' required>
+      </div>
+
+      <div class='input_div'>
+          <label for='p'>Senha do Wi-Fi</label>
+          <input id='p' length='64' name='pass' placeholder='Digite a senha do seu Wi-Fi' required>
+      </div>
+
+
+        <br>
+        <hr>
+        <br>
+        <h2>Sua conta</h2>
+        Nos informe o email que poderá controlar esse dispositivo.
+        <div class='input_div'>
+            <label for="e">Email da sua conta</label>
+            <br>
+            <input id='e' length='255' name='e' placeholder='exemplo@email.com' required type='email'>
+        </div>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <button class='submit' type='submit'>Salvar Alterações</button>
+</form>
+<script>
+    function c(e) {
+      var paragraph = e.querySelector('span');
+      document.getElementById('s').value = paragraph ? paragraph.textContent : '';
+      document.getElementById('p').focus();
+    }
+
+    let cpop = null;
+
+    function sp(e) {
+            if (cpop) {
+                document.getElementById(cpop).style.display = 'none';
+            }
+            cpop = e;
+            document.getElementById(e).style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        
+    }
+
+    function hp() {
+        if (cpop) {
+            document.getElementById(cpop).style.display = 'none';
+            cpop = null;
+        }
+        document.getElementById('overlay').style.display = 'none';
+    }
+  </script>
+  </body>
+
+
+
+
+
+
+
+
+
+
+
+
