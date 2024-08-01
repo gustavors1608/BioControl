@@ -25,3 +25,4 @@ jobs:
         with:
           compliance: specification
           library-manager: update
+          project-path: ./
