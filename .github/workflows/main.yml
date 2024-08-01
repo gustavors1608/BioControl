@@ -1,0 +1,22 @@
+name: Check Arduino
+
+on:
+  push:
+  pull_request:
+  #schedule:
+    # Ajuste a expressão cron para alterar a frequência da execução agendada.
+    # "0 8 * * TUE" significa às 8:00 UTC todas as terças-feiras.
+    # - cron: "0 8 * * TUE"
+  workflow_dispatch:
+  repository_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Arduino Lint
+        uses: arduino/arduino-lint-action@v1
+        with:
+          compliance: specification
+          library-manager: update
