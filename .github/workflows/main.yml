@@ -25,4 +25,5 @@ jobs:
         with:
           compliance: specification
           library-manager: update
-          project-path: ./
+          project-path: src  # Ajuste este caminho para o diretório correto
+          project-type: all
