@@ -29,8 +29,6 @@
 #define api_key "SUA_CHAVE_DE_API" 
 #define link "https://api.openweathermap.org/data/2.5/weather?lat=" latitude "&lon=" longitude "&units=metric&appid=" api_key
 
-//https://api.openweathermap.org/data/2.5/weather?lat=-28.30&lon=-54.22&appid=ddd9de4839420466345e2e508a5ba36a&units=metric
-
 #define T_DADOS_CLIMATICOS 1*60*1000
 #define T_BOMBA 1*60*1000 // 5 MINUTOS X 60 SEGUNDOS X 1000 MS
 #define T_DHT 2000
