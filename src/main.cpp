@@ -1,132 +1,149 @@
-/*
-  DESENVOLVIDO POR: Gustavo R. Stroschon
-  DATA INICIO: 24/05/2024
-  DATA ULTIMA ATUALIZAÇÃO: 31/07/2024
-
-
-  proximas atividades:
-  dados de clima externos
-*/
-
+/**
+ * @file main.cpp
+ * @link https://github.com/gustavors1608/BioControl
+ * @author Gustavo R. Stroschon 
+ * @brief Código fonte principal para o sistema de controle da fazenda vertical.
+ * @version 1.5
+ * @date 2024-08-09
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ * @details Este código controla os seguintes atuadores:
+ *          - Bomba d'água da aquaponia (com redundância e detecção de falhas).
+ *          - Irrigação automatizada.
+ *          - Exaustores para controle de temperatura e umidade.
+ *          - Sistema de iluminação LED indoor.
+ *          - Refletor central indoor.
+ *          - Lâmpadas normais.
+ * 
+ *          O controle desses atuadores é realizado com base em:
+ *          - Leituras de temperatura e umidade do ar (sensor DHT11).
+ *          - Horário (obtido via NTP).
+ *          - Comandos de voz via Amazon Alexa.
+ * 
+ *          O sistema também possui um display LCD para exibir informações sobre o estado atual da Fazenda vertical.
+ * 
+ *  @todo melhorias futuras:
+ *          - retirar codigo inutilizado
+ *          - sistemas de segurança contra travamentos ou erros em cascata
+ *          - funcoes de simulacao de clima (alvos de temperatura e umidade, talvez pid etc)
+ *          - melhorar controle de exaustores, deixando funcao de controle de temp com funcionamento sincronizado com umidade
+ */
 
 #include <Arduino.h>
 #include <Thread.h>
 #include <DHT.h>
 #include <CronOut.h>
-//#include "WifiPortal.h"
 #include "fauxmoESP.h"
 #include <WiFi.h>
 #include <NTPClient.h>
+#include <WiFiUdp.h>
 #include <HTTPClient.h>
 #include <Arduino_JSON.h>
 
 #include <OffTime.cpp>
 #include "lcd_extend.cpp"
 
-//tempo entre chamadas das threads
+//------------------------------------------------------------------------------
+// Definições Globais
+//------------------------------------------------------------------------------
+
+
+//------------------------------------------------------------------------------
+// Macros
+//------------------------------------------------------------------------------
+
+// Defina esta macro para ativar o log. Comente para desativar.
+#define ACTIVE_DEBUG
+
+#ifdef ACTIVE_DEBUG 
+  //logger("mensagem", "local")
+  #define logger(x,y) Serial.println("[" + String(y) + "]: " + String(x))
+  #define log_point() Serial.print(".")
+  #define new_line() Serial.println()
+#else
+  #define logger(x,y) // Nada
+  #define log_point() // nada tambem
+  #define new_line() // mais um nada
+#endif
+
+#define BAUND_RATE 115200
+
+//------------------------------------------------------------------------------
+// Configurações de Rede e API
+//------------------------------------------------------------------------------
+#define WIFI_SSID "BioControl"
+#define WIFI_PASS "Geodese2024"
+
 #define latitude "-28.30"
 #define longitude "-54.22"
-#define api_key "SUA_CHAVE_DE_API" 
+#define api_key "4dc6bcd36941c512f7dc5588bb34ee1c" 
 #define link "https://api.openweathermap.org/data/2.5/weather?lat=" latitude "&lon=" longitude "&units=metric&appid=" api_key
 
-#define T_DADOS_CLIMATICOS 1*60*1000
-#define T_BOMBA 1*60*1000 // 5 MINUTOS X 60 SEGUNDOS X 1000 MS
-#define T_DHT 2000
-#define T_LCD 500
-#define T_DURACAO_IRRIGACAO 1*60*1000 // a cada 30 minutos e a duracao será de 30 minutos ligado, alterar o valor de baixo tbm
-#define N_VEZES_CHAMADA_ENTRE_IRRIG 2 //max 255, a cada N_VEZES_CHAMADA_ENTRE_IRRIG chamadas (cada chamada a cada T_DURACAO_IRRIGACAO) vai irrigar, para descobrir o tempo: N_VEZES_CHAMADA_ENTRE_IRRIG x T_DURACAO_IRRIGACAO / 60 = a cada quantas horas vai irrigar
-#define T_VERIFICAR_EXAUSTOR 60*1000 //1 vez a cada 60 segundos
-#define T_VERIFICAR_LEDS 3*60*1000//a cada 3 minuto verifica se ja está na hora de ligar ou desligar
+//------------------------------------------------------------------------------
+// Configurações de Tempo (em milissegundos)
+//------------------------------------------------------------------------------
+#define T_DADOS_CLIMATICOS 15*60*1000// Tempo entre atualizações dos dados climáticos externos
+#define T_BOMBA 5*60*1000            // Tempo de ciclo da bomba d'água (ligada/desligada)
+#define CICLOS_BOMBA_DESLIGADA 3     // Quantos ciclos desligados para cada ciclo ligdado, ex: 3 = 5 ligado e 15 desligado
+#define T_DHT 5000                   // Tempo entre leituras do sensor DHT11
+#define T_LCD 500                    // Tempo entre atualizações do display LCD
+#define T_DURACAO_IRRIGACAO 1*60*1000 // Tempo de duração de cada ciclo de irrigação
+#define N_VEZES_CHAMADA_ENTRE_IRRIG 2 // Define a frequência da irrigação em relação ao tempo de duração (N * T_DURACAO_IRRIGACAO)
+#define T_VERIFICAR_EXAUSTOR 1*60*1000 // Tempo entre verificações da temperatura para controle dos exaustores
+#define T_VERIFICAR_LEDS 3*60*1000   // Tempo entre verificações do horário para controle dos LEDs
 
-//configuração de operação
-#define TEMP_MAX 30
-#define TEMP_IDEAL 25
-#define TEMP_MIN 20
-#define TEMP_MARGEM 2
+//------------------------------------------------------------------------------
+// Configurações de Operação da Fazenda Vertical
+//------------------------------------------------------------------------------
+#define TEMP_MAX 30        // Temperatura máxima desejada na estufa
+#define TEMP_IDEAL 25       // Temperatura ideal na estufa
+#define TEMP_MIN 20         // Temperatura mínima desejada na estufa
+#define TEMP_MARGEM 2      // Margem de temperatura para ativar/desativar o controle
 
-#define UMID_MAX 95
-#define UMID_IDEAL 70
-#define UMID_MAX_EXAUST 90
+#define UMID_MAX 95         // Umidade máxima permitida na estufa
+#define UMID_IDEAL 70        // Umidade ideal na estufa
+#define UMID_MAX_EXAUST 90  // Umidade que ativa os exaustores (se a externa for menor)
 
-#define TIMEOUT_EXAUSTORES 60*60*1000 //em Ms
+#define TIMEOUT_EXAUSTORES 60*60*1000 // Tempo máximo que os exaustores podem ficar ligados continuamente
 
-#define HORA_DESLIGAR_LED 21
-#define HORA_LIGAR_LED 8
+#define HORA_DESLIGAR_LED 21 // Hora para desligar os LEDs
+#define HORA_LIGAR_LED 8    // Hora para ligar os LEDs
 
-//configuração de pinos
-
+//------------------------------------------------------------------------------
+// Mapeamento de Pinos
+//------------------------------------------------------------------------------
 #define PIN_SENSOR_DHT11 32
-
 #define PIN_SENSOR_FLUXO 2
-
 #define PIN_BOIA_MAX  34
 #define PIN_BOIA_MIN 35
-
 #define PIN_LED_IR 0
-
 #define PIN_DATA_RELES 4
 #define PIN_CLOCK_RELES 19
 #define PIN_LATCH_RELES 18
-
 #define PIN_DATA_LEDS1  17
 #define PIN_CLOCK_LEDS1 16
 #define PIN_LATCH_LEDS1 4
- 
-#define PIN_DATA_LEDS2 13//12
+#define PIN_DATA_LEDS2 13 
 #define PIN_CLOCK_LEDS2 14
 #define PIN_LATCH_LEDS2 27
-
 #define PIN_DATA_LEDS3 33
 #define PIN_CLOCK_LEDS3 25
 #define PIN_LATCH_LEDS3 26
 
+//------------------------------------------------------------------------------
+// Definições de Cor dos LEDs
+//------------------------------------------------------------------------------
 #define RED 1
 #define BLUE 0
 
+//------------------------------------------------------------------------------
+// Estruturas de Dados
+//------------------------------------------------------------------------------
 
-
-
-// Inicializa o WifiPortal
-//WifiPortal wifiPortal;
-
-#define WIFI_SSID "BioControl"
-#define WIFI_PASS "Geodese2024"
-
-void wifiSetup() {
-
-    // Set WIFI module to STA mode
-    WiFi.mode(WIFI_STA);
-
-    // Connect
-    Serial.printf("[WIFI] Connecting to %s ", WIFI_SSID);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-
-    // Wait
-    while (WiFi.status() != WL_CONNECTED) {
-        Serial.print(".");
-        delay(100);
-    }
-    Serial.println();
-
-    // Connected!
-    Serial.printf("[WIFI] SSID: %s, IP address: %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-    
-
-}
-//classe de controle do ar condicionado
-class AC_CTRL{
-  private:
-    /* data */
-  public:
-    AC_CTRL(/* args */){};
-    void set_temp(byte temp){};
-    void set_desumid(){};
-    void set_normal(){};
-    void on(){};
-    void off(){};
-};
-
-//variavel global que vai servir de base para controlar os shift register
+/**
+ * @brief Estrutura para armazenar o estado dos atuadores.
+ */
 struct Outs{
   bool bomba1 = false;
   bool bomba2 = false;
@@ -136,61 +153,71 @@ struct Outs{
   bool contatora_leds = false;
   bool refletor = false;
   bool lampada = false;
-
   bool ac = false;
 };
-Outs state;
 
+/**
+ * @brief Estrutura para armazenar os dados dos sensores.
+ */
 struct Ins{
   byte temperatura = TEMP_IDEAL;
   byte umidade = UMID_IDEAL;
-
-  //estacao meteorologica
   bool chuva = false;
-  bool umidade_externa = UMID_IDEAL;
+  byte umidade_externa = UMID_IDEAL;
 };
-Ins input;
 
-//momento que foi chamado ultima vez a funcao de controle da bomba, usado para calcular quanto tempo falta para acionar ou desligar a bomba de agua
-unsigned long millis_last_bomba = 0;
+//------------------------------------------------------------------------------
+// Variáveis Globais
+//------------------------------------------------------------------------------
+Outs state;                // Variável global para armazenar o estado dos atuadores
+Ins input;                 // Variável global para armazenar os dados dos sensores
+unsigned long millis_last_bomba = 0; // Variável para controlar o tempo de atuação da bomba d'água
 
-//usada para desativar o controle automatico caso a alexa que tenha mandado comando
-bool alexa_controll_exaust = false;
-bool alexa_controll_bomba = false;
-bool alexa_controll_leds = false;
+bool alexa_controll_exaust = false; // Flag para indicar se o controle dos exaustores está sendo feito pela Alexa
+bool alexa_controll_bomba = false;  // Flag para indicar se o controle da bomba d'água está sendo feito pela Alexa
+bool alexa_controll_leds = false;   // Flag para indicar se o controle dos LEDs está sendo feito pela Alexa
 
+//------------------------------------------------------------------------------
+// Instâncias de Objetos
+//------------------------------------------------------------------------------
+OffTime offtime;           // Objeto para lidar com o horário
+WiFiUDP udp;              // Objeto para comunicação UDP (NTP)
+NTPClient ntp(udp, "a.st1.ntp.br", -3 * 3600); // Objeto para sincronizar o horário com o servidor NTP brasileiro
+fauxmoESP fauxmo;         // Objeto para comunicação com a Amazon Alexa
 
-OffTime offtime;
-WiFiUDP udp;
-NTPClient ntp(udp, "a.st1.ntp.br", -3 * 3600);/* Cria um objeto "NTP" com as configurações utilizadas no Brasil */
+Thread thread_bomba = Thread();          // Thread para controle da bomba d'água
+Thread thread_irrigacao = Thread();       // Thread para controle da irrigação
+Thread thread_dht = Thread();            // Thread para leitura do sensor DHT11
+Thread thread_lcd = Thread();             // Thread para atualização do display LCD
+Thread thread_exaustor = Thread();        // Thread para controle dos exaustores
+Thread thread_clima = Thread();           // Thread para obter dados climáticos externos
+Thread thread_leds = Thread();            // Thread para controle dos LEDs
 
-fauxmoESP fauxmo;
+DHT dht(PIN_SENSOR_DHT11, DHT11);        // Objeto para o sensor DHT11
+CronOut exaustor_timeout((60*60*1000),nullptr); // Timeout para os exaustores (60 minutos)
+// AC_CTRL ar_condicionado = AC_CTRL();    // Objeto para controle do ar condicionado (não implementado)
+CtrlLCD lcd(0x27,16,2);                // Objeto para o display LCD
 
-//definição dos objetos do tipo thread
-Thread thread_bomba = Thread();
-Thread thread_irrigacao = Thread();
-Thread thread_dht = Thread();
-Thread thread_lcd = Thread();
-Thread thread_exaustor = Thread();
-Thread thread_clima = Thread();
-Thread thread_leds = Thread();
+//------------------------------------------------------------------------------
+// Símbolo Personalizado para a Barra de Carregamento do LCD
+//------------------------------------------------------------------------------
+byte bar_char_custom[8] = {
+  0b00000,
+  0b01110,
+  0b01110,
+  0b01110,
+  0b01110,
+  0b01110,
+  0b01110,
+  0b00000
+};
 
-//inicializacao do sensor de temperatura do ar e umidade
-DHT dht(PIN_SENSOR_DHT11, DHT11);
-
-//configuraçoes dos timeouts
-CronOut exaustor_timeout((60*60*1000),nullptr); // Timeout de 60 minutos sem callback
-
-//controle do ar condicionado
-AC_CTRL ar_condicionado = AC_CTRL();
-
-//inicializacao do lcd
-CtrlLCD lcd(0x27,16,2);
-
-//declaracao das funcoes
+//------------------------------------------------------------------------------
+// Protótipos de Funções
+//------------------------------------------------------------------------------
+void wifi_config();
 void modo_apresentacao();
 void main_bomba_agua();
-void main_controll_nivel_caixa();
 void set_outs();
 void code_74hc595(bool data_arr[], byte pin_data, byte pin_clock, byte pin_latch);
 void print_bin(byte aByte);
@@ -204,40 +231,13 @@ void controll_temp();
 void set_led(bool color, byte num_led, bool state);
 void ligar_leds();
 void desligar_leds();
+void main_dados_clima();
+void main_exaustores();
+void main_leds();
 
-//simbolo personalizado usado para barra de carregamento
-byte bar_char_custom[8] = {
-  0b00000,
-  0b01110,
-  0b01110,
-  0b01110,
-  0b01110,
-  0b01110,
-  0b01110,
-  0b00000
-};
-
-
-
-
-// Função de callback para mostrar enquanto o portal está aberto, poderia ser um led que fica piscando enquanto está configurando
-void config_callback() {
-  lcd.msg(1,0,"Configure o WiFi");
-}
-
-
-/**
- * Definicação das funções para a alexa
- * exaustores
- * leds
- * refletor
- * luz
- * bomba
- * irrigacao
- * 
-*/
-
-
+//------------------------------------------------------------------------------
+// Funções para Controle da Alexa
+//------------------------------------------------------------------------------
 #define ID_bomba           "bomba de água"
 #define ID_bomba_auto      "aquaponia automática"
 #define ID_exaustor        "exaustores"
@@ -247,12 +247,43 @@ void config_callback() {
 #define ID_lampadas        "iluminação"
 #define ID_leds_auto       "fonte automática"
 
+//==============================================================================
+// Função de Configuração do WiFi
+//==============================================================================
+void wifi_config() {
+    WiFi.mode(WIFI_STA);
+    logger("conectando a rede "+String(WIFI_SSID), "WIFI");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
 
-/**
- * Definicação das funções das threads / rotinas
-*/
+    // Aguarda a conexão
+    while (WiFi.status() != WL_CONNECTED) {
+        log_point();
+        delay(100);
+    }
+    new_line();
 
+    // Conexão estabelecida
+    logger("Ip adquirido: "+ String(WiFi.localIP()), "WIFI");
+}
 
+//==============================================================================
+// Classe para Controle do Ar Condicionado (Não Implementado)
+//==============================================================================
+class AC_CTRL{
+  private:
+    /* data */
+  public:
+    AC_CTRL(/* args */){};
+    void set_temp(byte temp){};
+    void set_desumid(){};
+    void set_normal(){};
+    void on(){};
+    void off(){};
+};
+
+//==============================================================================
+// Função para Obter Dados Climáticos Externos
+//==============================================================================
 void main_dados_clima(){
     if(WiFi.status()== WL_CONNECTED){
       WiFiClientSecure client;
@@ -268,147 +299,116 @@ void main_dados_clima(){
       String jsonBuffer = "{}"; 
       
       if (httpResponseCode>0) {
-        Serial.print("HTTP Response code: ");
-        Serial.println(httpResponseCode);
         jsonBuffer = http.getString();
       }
-      else {
-        Serial.print("Error code: ");
-        Serial.println(httpResponseCode);
-      }
+
+      logger("Resposta http: "+String(httpResponseCode),"CLIMA");
+
       // Free resources
       http.end();
 
       //Serial.println(jsonBuffer);
       JSONVar myObject = JSON.parse(jsonBuffer);
   
-      // JSON.typeof(jsonVar) can be used to get the type of the var
       if (JSON.typeof(myObject) == "undefined") {
-        Serial.println("Parsing input failed!");
+        logger("Erro ao processar o Json", "CLIMA");
         return;
       }
     
-      
-      Serial.print("Temperatura: ");
-      Serial.println(myObject["main"]["temp"]);
-      
-      Serial.print("Umidade: ");
-      Serial.println(myObject["main"]["humidity"]);
+      logger("Umidade Externa: " + myObject["main"]["humidity"], "CLIMA");
+
       input.umidade_externa = myObject["main"]["humidity"];
     }
-
 }
 
+//==============================================================================
+// Função para Atualizar o Display LCD
+//==============================================================================
 void main_lcd(){
 
-  //primeira linha do codigo mostra umidade do ar, temperatura do ar, e tempo até ligar a bomba de agua da aquaponia
-  lcd.msg(0,0,"Umd:");
-  lcd.msg(0,4,String(input.umidade));
-  lcd.msg(0,6,"% Temp:");
-  lcd.msg(0,13,String(input.temperatura));
-  lcd.msg(0,15,"C");
+  // Primeira linha do LCD: Umidade, Temperatura e Tempo até a Próxima Ativação da Bomba
+  char buffer[20];
+  sprintf(buffer, "Umd:%d% Temp:%dC", String(input.umidade), String(input.temperatura));
+  lcd.msg(0,0,String(buffer));
 
-// Define os tempos de operação em milissegundos
-#define TEMPO_LIGADA  T_BOMBA
-#define TEMPO_DESLIGADA  T_BOMBA*2
+  // Calcula o tempo restante para ligar/desligar a bomba
+  unsigned long tempo_passado = millis() - millis_last_bomba;
+  unsigned short segundos_restantes;
 
-// Calcula quanto tempo passou desde a última mudança de estado
-unsigned long tempo_passado = millis() - millis_last_bomba;
+  if (state.bomba1 == true || state.bomba2 == true) {
+      // Bomba ligada: calcula o tempo restante até desligar
+      if (tempo_passado < T_BOMBA) {
+          segundos_restantes = (T_BOMBA - tempo_passado) / 1000;
+      } else {
+          segundos_restantes = 0; 
+      }
+  } else {
+      // Bomba desligada: calcula o tempo restante até ligar
+      if (tempo_passado < T_BOMBA * CICLOS_BOMBA_DESLIGADA) {  // Considera o tempo total do ciclo (ligada + desligada)
+          segundos_restantes = (T_BOMBA * CICLOS_BOMBA_DESLIGADA - tempo_passado) / 1000;
+      } else {
+          segundos_restantes = 0; 
+      }
+  }
 
-// Variáveis para armazenar o tempo restante em segundos
-unsigned short segundos_restantes;
+  // Formata a mensagem de tempo restante
+  byte minutos = segundos_restantes / 60;
+  byte segundos = segundos_restantes % 60;
+  sprintf(buffer, "Bomba %d:%02d Min", minutos, segundos);
+  String msg = String(buffer);
 
-// Verifica o estado da bomba para calcular o tempo restante
-if (state.bomba1 == true or state.bomba2 == true) {
-    // Se a bomba está ligada, calcula o tempo restante até desligar
-    if (tempo_passado < TEMPO_LIGADA) {
-        segundos_restantes = (TEMPO_LIGADA - tempo_passado) / 1000;
-    } else {
-        segundos_restantes = 0; // Se já passou o tempo, ela deve ser desligada
-    }
-} else {
-    // Se a bomba está desligada, calcula o tempo restante até ligar
-    if (tempo_passado < TEMPO_DESLIGADA) {
-        segundos_restantes = (TEMPO_DESLIGADA - tempo_passado) / 1000;
-    } else {
-        segundos_restantes = 0; // Se já passou o tempo, ela deve ser ligada
-    }
-}
-
-// Calcula os minutos e segundos restantes
-byte minutos = segundos_restantes / 60;
-byte segundos = segundos_restantes % 60;
-
-// Formata a mensagem com o tempo restante
-char buffer[20];
-sprintf(buffer, "Bomba %d:%02d Min", minutos, segundos);
-String msg = String(buffer);
-
-
-  Serial.println(msg);
+  logger(msg, "MAIN LCD");
   lcd.msg(1,0,msg);
 }
 
-//verifica o estado da bomba e altera o mesmo, verifica se nao teve problemas na bomba tbm, se teve, liga a outra bomba
+//==============================================================================
+// Função para Controlar a Bomba D'Água
+//==============================================================================
 void main_bomba_agua(){
-  //bomba de agua, se nao tiver fluxo e ja trocou a bomba, entao espera pq pode ter secado a caixa
+  static char flag_vez_ligar = 0; 
 
-  static char flag_vez_ligar = 0; //para cada vez ligada, deve aguardar 2 desligada
-  Serial.println("main_bomba_agua "+String(alexa_controll_bomba) + " contagem: "+String((int)flag_vez_ligar));
 
+  // Verifica se o controle pela Alexa está desativado
   if(alexa_controll_bomba == false){
-
-    if (state.bomba1 == false and flag_vez_ligar >= 2){//se tiver desligada e for ligar, verifica ja se a flag é igual 2 
+    // Lógica de alternância entre as bombas (ainda não implementada a detecção de falhas)
+    if(state.bomba1 == false && flag_vez_ligar < CICLOS_BOMBA_DESLIGADA){
+      flag_vez_ligar++;
+    }
+    
+    if (state.bomba1 == false && flag_vez_ligar >= CICLOS_BOMBA_DESLIGADA){
       millis_last_bomba = millis();
       state.bomba1 = true; 
       state.bomba2 = false;
       flag_vez_ligar = 0;
-
-    }else if (state.bomba1 == true){//se tiver ligada, vai desligar e somar 1 vez na flag
+    } else if (state.bomba1 == true){
       millis_last_bomba = millis();
       state.bomba1 = false; 
       state.bomba2 = false;
       flag_vez_ligar++;
-
-    }else {//se a bomba tiver desligada e a flag nao foi atingida
-      flag_vez_ligar++;
     }
-    
     set_outs();
-    
-    /*
-    delay(1000);
-    if (digitalRead(PIN_SENSOR_FLUXO) == false && state.bomba1 == true){
-      state.bomba1 = false;
-      state.bomba2 = true;
-      set_outs();
-      delay(1000);
-
-      if (digitalRead(PIN_SENSOR_FLUXO) == false && state.bomba2 == true){
-        //ligou as 2 e ainda nao teve flxo? entao pode ser que nao tenha agua.... desliga e espera a proxima chamada
-        state.bomba1 = false;
-        state.bomba2 = false;
-        set_outs();
-      }
-    }*/
-    
   }
+
+  //Serial.println("main_bomba_agua "+String(alexa_controll_bomba) + " contagem: "+String((int)flag_vez_ligar));
 }
 
 
-//busca dados do sensor dht 11
+//==============================================================================
+// Função para Ler os Dados do Sensor DHT11
+//==============================================================================
 void main_get_dht(){
-  if (!isnan(dht.readHumidity()) == false || isnan(dht.readTemperature()) == false) { // se nao tiver erro na leitura, atribui valor
+  if (!isnan(dht.readHumidity()) == false || isnan(dht.readTemperature()) == false) { 
     input.umidade = int(dht.readHumidity());
     input.temperatura = int(dht.readTemperature());
   }
-
 }
 
-//a cada 20x tempo liga a irrigacao durante x tempo 
+//==============================================================================
+// Função para Controlar a Irrigação
+//==============================================================================
 void main_irrigacao(){
   static byte vez_de_irrigar = 0;
-  //a cada tantas chamadas em 1 delas mantem ligada até a proxima chamada
+
   vez_de_irrigar++;
 
   if (vez_de_irrigar >= N_VEZES_CHAMADA_ENTRE_IRRIG){
@@ -420,88 +420,98 @@ void main_irrigacao(){
   set_outs();
 }
 
-//verifica se temperatura está ideal
+//==============================================================================
+// Função para Controlar os Exaustores
+//==============================================================================
 void main_exaustores(){
   if(alexa_controll_exaust == false){
-    controll_temp();
-    controll_umid();
+    controll_umid(); // verifica o controle de umidade
+    controll_temp(); // verifica acoes para controle de temperatura
   }
 }
 
+//==============================================================================
+// Função para Controlar a Temperatura (Exaustores e Ar Condicionado)
+//==============================================================================
 void controll_temp(){
   static bool status_ac = false;
 
   if (input.temperatura > TEMP_MAX) {
-    //se tiver quente e tudo desligado, liga exaust por 1 hora pra ver se baixa
+    // Temperatura alta: liga os exaustores
     if (state.exaustor == false && status_ac == false) {
         state.exaustor = true;
-        exaustor_timeout.start();  // reinicia o contador
+        exaustor_timeout.start(); 
     } 
   } else if (input.temperatura < TEMP_MIN) {
-    // tá muito frio, entao liga o ac pra esquentar, e desliga o exaust se tiver ligado
+    // Temperatura baixa: liga o ar condicionado (não implementado)
     state.exaustor = false;
     status_ac = true;
-    ar_condicionado.on();
-    ar_condicionado.set_temp(TEMP_MAX - TEMP_MARGEM);  // 28
+    //ar_condicionado.on();
+    //ar_condicionado.set_temp(TEMP_MAX - TEMP_MARGEM); 
   }
 
-  //verifica se o exautor resolveu, se nao liga o ac
-  if (exaustor_timeout.hasTimedOut() && input.temperatura > TEMP_MAX) {//se ja ja ta ligado a tempo suficiente, e a temperatura ainda ta acima do maximo, entao liga o ar
+  // Verifica se o tempo máximo dos exaustores foi atingido
+  if (exaustor_timeout.hasTimedOut() && input.temperatura > TEMP_MAX) {
     state.exaustor  = false;
-
-    status_ac = true;
-    ar_condicionado.on();
-    ar_condicionado.set_temp(TEMP_MIN + TEMP_MARGEM);  // 22
+    // status_ac = true;
+    // ar_condicionado.on();
+    // ar_condicionado.set_temp(TEMP_MIN + TEMP_MARGEM);
   }
 
-  // se a temperatura estiver ideal, desliga exaust e ac
+  // Desliga os exaustores e o ar condicionado se a temperatura estiver ideal
   if (input.temperatura <= (TEMP_MAX - TEMP_MARGEM) && input.temperatura >= (TEMP_MIN + TEMP_MARGEM)) {
     state.exaustor  = false;
-    ar_condicionado.off();
+    //ar_condicionado.off();
   }
 }
 
+//==============================================================================
+// Função para Controlar a Umidade (Exaustores e Ar Condicionado)
+//==============================================================================
 void controll_umid(){
-  //se tiver abaixo do extremo mas aind aalta, liga os exaustores (se nao estiver chovendo)
-  if (input.umidade > UMID_MAX_EXAUST && input.umidade < UMID_MAX){
-    //liga exaustores até baixar essa umidade, se nao tiver chovendo e a umidade externa tiver mais baixa que a maxima interna
+  // Liga os exaustores se a umidade estiver alta (mas não no extremo) e temperatura tiver nao tao baixa, 
+  // para poder manter a temperatura interna em caso de dia frio e umido, melhor manter quente e umido do que seco e frio (peixes principalemtne)
+  if ((input.umidade > UMID_MAX_EXAUST && input.umidade < UMID_MAX) && input.temperatura > TEMP_MIN){
     if(input.chuva == false && input.umidade_externa < UMID_MAX_EXAUST){
       state.exaustor = true;
       exaustor_timeout.start();
     }
-  }else if(input.umidade >= UMID_MAX){  // se tiver no extremo superior de umidade liga o ac
-      ar_condicionado.on();
-      delay(1000);
-      ar_condicionado.set_desumid();
+  } else if(input.umidade >= UMID_MAX){  // Liga o ar condicionado se a umidade estiver muito alta (não implementado)
+      //ar_condicionado.on();
+      //delay(1000);
+      //ar_condicionado.set_desumid();
   }
 
-  if (exaustor_timeout.hasTimedOut() || input.umidade <= (UMID_MAX_EXAUST - 5)) { //desliga após um tempo ou se atingir a umidade
+  // Desliga os exaustores após o timeout ou se a umidade baixar
+  if (exaustor_timeout.hasTimedOut() || input.umidade <= (UMID_MAX_EXAUST - 5)) { 
     state.exaustor  = false;
-    ar_condicionado.on();
-    delay(1000);
-    ar_condicionado.set_normal(); //tira do modo desumidificador
-    delay(1000);
-    ar_condicionado.off();
+    // ar_condicionado.on();
+    // delay(1000);
+    // ar_condicionado.set_normal();
+    // delay(1000);
+    // ar_condicionado.off();
   }
 }
 
+//==============================================================================
+// Funções de Uso Geral
+//==============================================================================
 
-
-/**
- * funções de uso geral
-*/
-
-//obs, recebe o endereco da variavel de saida, altera o state dela direto na memoria com ponteiro e define as saidas, por que isso? para alterar as saidas sem precisar digitar essas funcoes todas pra cada saida difetrente por cada saida ter um nome diferente
-void self_test(bool* state) {//auto teste para saidas
+//==============================================================================
+// Função para Auto Teste das Saídas
+//==============================================================================
+void self_test(bool* state) {
   (*state) = true;
   set_outs();
-  delay(100);//tempo ligado
+  delay(100);
   (*state) = false;
   set_outs();
-  delay(100);//tempo desligado
+  delay(100);
 }
 
-//atribui ao array os valores que estao na struct de estados das saidas
+//==============================================================================
+// Função para Atualizar o Estado das Saídas
+//==============================================================================
 void set_outs(){
   static bool array_reles[8] = {0,0,0,0,0,0,0,0};
 
@@ -517,35 +527,31 @@ void set_outs(){
   code_74hc595(array_reles,PIN_DATA_RELES,PIN_CLOCK_RELES,PIN_LATCH_RELES);
 }
 
-//envia array de dados para o 74hc595 
+//==============================================================================
+// Função para Enviar Dados para o Shift Register 74HC595
+//==============================================================================
 void code_74hc595(bool data_arr[], byte pin_data, byte pin_clock, byte pin_latch){
-  // Variável para armazenar o número binário
   byte binario = 0b00000000;
 
   for (int i = 0; i < 8; i++) {
-      // Se o valor no índice 'i' for 1, define o bit correspondente para 1
       if (data_arr[i] == 1) {
           bitWrite(binario, 7 - i, 1);
       }
   }
-  //print_bin(binario);
 
   digitalWrite(pin_latch, LOW);
-
   shiftOut(pin_data, pin_clock, MSBFIRST, binario);
-
-  delay(1);
   digitalWrite(pin_latch, HIGH);
-  delay(1);
   digitalWrite(pin_latch, LOW);
 }
 
+//==============================================================================
+// Função para Controlar os LEDs
+//==============================================================================
 void main_leds(){
-  //verifica o horario atual, se ja estiver na hora de ligar, liga, se estiver na hora de desligar, desliga
-  //verifica o horario de acordo com um relogio interno que é constantemente atualizado pelo ntp
   if(alexa_controll_leds == false){
     byte hora = offtime.get_hour();
-    if(hora >= HORA_LIGAR_LED and hora <= HORA_DESLIGAR_LED){
+    if((hora >= HORA_LIGAR_LED) && (hora <= HORA_DESLIGAR_LED)){
       ligar_leds();
     }else{
       desligar_leds();
@@ -553,61 +559,40 @@ void main_leds(){
   }
 }
 
-
-//liga os leds em sequencia (nao terminado ainda)
+//==============================================================================
+// Função para Modo de Apresentação dos LEDs (Não Implementado)
+//==============================================================================
 void modo_apresentacao(){
-  //liga 1 por um azul, apaga, depois 1 por um vermelho do outro sentido, apaga, depois tudo azul, depois tudo vermelho e dai tudo roxo
-  for (byte i = 0; i < 12; i++){
-    set_led(BLUE, i, true);
-    delay(500);
-    set_state_leds(0,0);
-  }
-  for (byte i = 12; i > 0; i--){
-    set_led(RED, i, true);
-    delay(500);
-    set_state_leds(0,0);
-  }
-  delay(500);//apagado
-  set_state_leds(0,1);//azul
-  delay(1000);
-  set_state_leds(1,0);//vermelho
-  delay(1000);
-  set_state_leds(0,0);//apagado
-  delay(1000);
-  //set_state_leds(1,1);//roxo
-
-  bool usados[12];
-  for (int i = 0; i < 12; i++) {
-    byte num_aleatorio;
-    do {
-      num_aleatorio = random(12);
-    } while (usados[num_aleatorio]);
-    usados[num_aleatorio] = true;
-    set_led(RED, num_aleatorio,true);
-    set_led(BLUE, num_aleatorio,true);
-    delay(200);
-  }
-
+  // Lógica para o modo de apresentação dos LEDs (a ser implementada)
 }
 
+//==============================================================================
+// Função para Ligar os LEDs
+//==============================================================================
 void ligar_leds(){
   state.contatora_leds = true;
   state.refletor = true;
   set_outs();
 
   set_state_leds(1,1);
-  Serial.println("ligando leds");
+  //Serial.println("ligando leds");
 }
 
+//==============================================================================
+// Função para Desligar os LEDs
+//==============================================================================
 void desligar_leds(){
   state.contatora_leds = false;
   state.refletor = false;
   set_outs();
 
   set_state_leds(0,0);
-  Serial.println("desligando leds");
+  //Serial.println("desligando leds");
 }
 
+//==============================================================================
+// Função para Controlar um LED Individual
+//==============================================================================
 void set_led(bool color, byte num_led, bool state){
   static bool data_arr_2[8] = {0,0,0,0,0,0,0,0};
   static bool data_arr_3[8] = {0,0,0,0,0,0,0,0};
@@ -632,26 +617,24 @@ void set_led(bool color, byte num_led, bool state){
   code_74hc595(data_arr_4,PIN_DATA_LEDS3,PIN_CLOCK_LEDS3,PIN_LATCH_LEDS3);
 }
 
+//==============================================================================
+// Função para Definir o Estado de Todos os LEDs
+//==============================================================================
 void set_state_leds(bool red_value, bool blue_value){  
-  //12 saidas vermelhas e 12 azuis *OBS: podem estar invertidas, mas ao testar se descobre
-
   for (byte i = 0; i < 12; i++){
     set_led(RED, i, red_value);
     set_led(BLUE, i, blue_value);
   }
-  
-
 }
 
-  
-
+//==============================================================================
+// Função de Configuração
+//==============================================================================
 void setup(){
   
-  // Configuração de sentido das GPIOS
+  // Configuração dos pinos
   pinMode(PIN_SENSOR_FLUXO, INPUT);
   pinMode(PIN_LED_IR, OUTPUT);
-
-  // Configuração dos pinos dos registradores de deslocamento como saída
   pinMode(PIN_DATA_RELES, OUTPUT);
   pinMode(PIN_CLOCK_RELES, OUTPUT);
   pinMode(PIN_LATCH_RELES, OUTPUT);
@@ -668,17 +651,17 @@ void setup(){
   pinMode(PIN_CLOCK_LEDS3, OUTPUT);
   pinMode(PIN_LATCH_LEDS3, OUTPUT);
 
-  Serial.begin(9600);
+  Serial.begin(BAUND_RATE);
 
-  //inicialização do lcd
+  // Inicialização do LCD
   lcd.init();                     
   lcd.backlight();
   lcd.createChar(0, bar_char_custom);
 
-  //iniciar o sensor dht11
+  // Inicialização do sensor DHT11
   dht.begin();
 
-  //iniciar tela de carregamento no lcd
+  // Tela de carregamento no LCD
   lcd.set_scroll(0,"Inicializando Sistema... ");
 
   for (byte i = 0; i < 16; i++){
@@ -691,8 +674,7 @@ void setup(){
   lcd.delete_scroll(1);
   lcd.delete_scroll(0);
 
-  //inicialização das threads
-
+  // Inicialização das threads
 	thread_bomba.onRun(main_bomba_agua);
   thread_dht.onRun(main_get_dht);
   thread_lcd.onRun(main_lcd);
@@ -709,12 +691,13 @@ void setup(){
   thread_lcd.setInterval(T_LCD);
   thread_clima.setInterval(T_DADOS_CLIMATICOS);
 
-  //rotinas de testes
+  // Rotinas de testes
   lcd.msg(0,0,"Iniciando testes");
 
-  set_outs();//desliga tudo
+  set_outs(); // Desliga tudo
   delay(1000);
-  //--- pulsa cada saida
+
+  // Teste das saídas
   self_test(&state.bomba1);  
   self_test(&state.bomba2);  
   self_test(&state.solenoide_irrigacao);  
@@ -725,78 +708,59 @@ void setup(){
   
   
   lcd.msg(1,0,"Conectando wifi");
-  wifiSetup();
-
-  //wifiPortal.set_config_callback(config_callback, 500);
-  //wifiPortal.connect();
+  wifi_config();
 
   lcd.clear();
-
   lcd.msg(1,0,"Obtendo horario");
 
-  ntp.begin();               /* Inicia o protocolo */
-  ntp.forceUpdate();    /* Atualização */
+  ntp.begin();               
+  ntp.forceUpdate();    
   unsigned long unix_time_ntp = ntp.getEpochTime();
   offtime.set(unix_time_ntp);
 
-  Serial.println(offtime.get_hour());
+  logger("Hora: "+offtime.get_hour(), "OFFTIME");
   
   lcd.msg(1,0,"Config. Alexa");
 
+  // Configuração da Alexa
+  fauxmo.createServer(true); 
+  fauxmo.setPort(80); 
+  fauxmo.enable(true);
 
-// By default, fauxmoESP creates it's own webserver on the defined port
-    // The TCP port must be 80 for gen3 devices (default is 1901)
-    // This has to be done before the call to enable()
-    fauxmo.createServer(true); // not needed, this is the default value
-    fauxmo.setPort(80); // This is required for gen3 devices
+  // Adiciona os dispositivos virtuais
+  fauxmo.addDevice(ID_bomba);
+  fauxmo.addDevice(ID_bomba_auto);
+  fauxmo.addDevice(ID_exaustor);
+  fauxmo.addDevice(ID_exaustor_auto);
+  fauxmo.addDevice(ID_lampadas);
+  fauxmo.addDevice(ID_leds);
+  fauxmo.addDevice(ID_refletor);
+  fauxmo.addDevice(ID_leds_auto); // Adiciona o dispositivo "leds_auto"
 
-    // You have to call enable(true) once you have a WiFi connection
-    // You can enable or disable the library at any moment
-    // Disabling it will prevent the devices from being discovered and switched
-    fauxmo.enable(true);
-
-    // You can use different ways to invoke alexa to modify the devices state:
-    // "Alexa, turn yellow lamp on"
-    // "Alexa, turn on yellow lamp
-    // "Alexa, set yellow lamp to fifty" (50 means 50% of brightness, note, this example does not use this functionality)
-
-    // Add virtual devices
-    fauxmo.addDevice(ID_bomba);
-    fauxmo.addDevice(ID_bomba_auto);
-    fauxmo.addDevice(ID_exaustor);
-    fauxmo.addDevice(ID_exaustor_auto);
-    fauxmo.addDevice(ID_lampadas);
-    fauxmo.addDevice(ID_leds);
-    fauxmo.addDevice(ID_refletor);
-
-    fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state_in, unsigned char value) {
+  // Define a função de callback para quando o estado de um dispositivo for alterado
+  fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state_in, unsigned char value) {
         
+    logger("Device: "+String(device_name) + " state: "+(state_in ? "ON" : "OFF"),"ALEXA");
 
-        Serial.printf("[MAIN] Device #%d (%s) state: %s value: %d\n", device_id, device_name, state_in ? "ON" : "OFF", value);
-
-        if (strcmp(device_name, ID_bomba)==0) {
-          state.bomba1 = state_in;
-        } else if (strcmp(device_name, ID_bomba_auto)==0) {
-          //invertido pois quando tiver no modo automatico (true), a alexa não irá controlar
-          alexa_controll_bomba = !state_in;
-        } else if (strcmp(device_name, ID_exaustor)==0) {
-          state.exaustor = state_in;
-        } else if (strcmp(device_name, ID_exaustor_auto)==0) {
-          //invertido pois quando tiver no modo automatico (true), a alexa não irá controlar
-          alexa_controll_exaust = !state_in;
-        } else if (strcmp(device_name, ID_lampadas)==0) {
-          state.lampada = state_in;
-        } else if (strcmp(device_name, ID_leds)==0) {
-          set_state_leds(state_in,state_in);
-          state.contatora_leds = state_in;
-        } else if (strcmp(device_name, ID_refletor)==0) {
-          state.refletor = state_in;
-        }else if (strcmp(device_name, ID_leds_auto)==0) {
-          //invertido pois quando tiver no modo automatico (true), a alexa não irá controlar
-          alexa_controll_leds = !state_in;
-        }
-
-    });
+    if (strcmp(device_name, ID_bomba)==0) {
+      state.bomba1 = state_in;
+    } else if (strcmp(device_name, ID_bomba_auto)==0) {
+      alexa_controll_bomba = !state_in;
+    } else if (strcmp(device_name, ID_exaustor)==0) {
+      state.exaustor = state_in;
+    } else if (strcmp(device_name, ID_exaustor_auto)==0) {
+      alexa_controll_exaust = !state_in;
+    } else if (strcmp(device_name, ID_lampadas)==0) {
+      state.lampada = state_in;
+    } else if (strcmp(device_name, ID_leds)==0) {
+      set_state_leds(state_in,state_in);
+      state.contatora_leds = state_in;
+    } else if (strcmp(device_name, ID_refletor)==0) {
+      state.refletor = state_in;
+    } else if (strcmp(device_name, ID_leds_auto)==0) {
+      alexa_controll_leds = !state_in;
+    }
+  });
   
   lcd.msg(1,0,"Sistema OK");
   
@@ -806,12 +770,22 @@ void setup(){
 
   millis_last_bomba = millis();
 
-  
+  // Executa as threads ao iniciar
+  thread_bomba.run();
+  thread_clima.run();
+  thread_leds.run();
+  thread_irrigacao.run(); 
+  thread_dht.run(); 
+  thread_lcd.run(); 
+  thread_exaustor.run(); 
 }
 
+//==============================================================================
+// Função de Loop Principal
+//==============================================================================
 void loop(){
 
-  //verifica se deve rodar alguma thread
+  // Executa as threads
 	if(thread_bomba.shouldRun())
 		thread_bomba.run();
   if(thread_clima.shouldRun())
@@ -827,7 +801,13 @@ void loop(){
   if(thread_exaustor.shouldRun())
 		thread_exaustor.run(); 
 
+  fauxmo.handle();
+  
   set_outs();
 
-  fauxmo.handle();
+  static unsigned long last = millis();
+  if (millis() - last > 5000) {
+      last = millis();
+      logger("Memoria livre: " + String(ESP.getFreeHeap()) + " bytes", "LOOP");
+  }
 }
