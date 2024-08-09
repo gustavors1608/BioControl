@@ -72,12 +72,12 @@
 //------------------------------------------------------------------------------
 // Configurações de Rede e API
 //------------------------------------------------------------------------------
-#define WIFI_SSID "BioControl"
-#define WIFI_PASS "Geodese2024"
+#define WIFI_SSID 
+#define WIFI_PASS
 
 #define latitude "-28.30"
 #define longitude "-54.22"
-#define api_key "4dc6bcd36941c512f7dc5588bb34ee1c" 
+#define api_key 
 #define link "https://api.openweathermap.org/data/2.5/weather?lat=" latitude "&lon=" longitude "&units=metric&appid=" api_key
 
 //------------------------------------------------------------------------------
