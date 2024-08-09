@@ -1,88 +1,103 @@
-# BioControl 🌿
+## BioControl 🌿
 
-O BioControl é um sistema avançado de automação para fazendas verticais, projetado para criar um ambiente otimizado para o cultivo de plantas. Utilizando tecnologia de ponta como o ESP32 e sensores diversos, o sistema gerencia temperatura, umidade, aquaponia, iluminação LED e irrigação de maneira automatizada e precisa. Com integração futura planejada para APIs externas, o BioControl Nexus é ideal para ambientes educacionais e de pesquisa (utilizado e projetado para a fazenda vertical da Fasa - Faculdade Santo Ângelo), demonstrando como a tecnologia pode facilitar práticas agrícolas inovadoras.
+O BioControl é um sistema avançado de automação para fazendas verticais, projetado para criar um ambiente otimizado para o cultivo de plantas. Utilizando tecnologia como o ESP32 e sensores diversos, o sistema gerencia temperatura, umidade, aquaponia, iluminação LED e irrigação de maneira automatizada e precisa. Desenvolvido e utilizado na fazenda vertical da FASA - Faculdade Santo Ângelo, o BioControl é ideal para ambientes educacionais e de pesquisa, demonstrando como a tecnologia pode facilitar práticas agrícolas inovadoras.
 
 ## Descrição 📝
 
-Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores como temperatura, umidade, aquaponia, iluminação e irrigação. O sistema é especialmente útil para ambientes educacionais, permitindo que alunos e pesquisadores vejam em ação as possibilidades de cultivo em um ambiente isolado do meio externo.
+Este projeto visa criar um ambiente controlado para plantas, gerenciando fatores como:
+
+- Temperatura 🌡️
+- Umidade 💧
+- Aquaponia 🐟
+- Iluminação 💡
+- Irrigação 🌱
+
+O sistema é especialmente útil para ambientes educacionais, permitindo que alunos e pesquisadores vejam em ação as possibilidades de cultivo em um ambiente isolado do meio externo, simulção de clima etc.
 
 ## Funcionalidades ⚙️
 
-
-- **🌡️ Monitoramento e Controle de Temperatura:**
-
-  - Ajusta a temperatura do ar usando exaustores e ar condicionado, mantendo-a dentro de um intervalo ideal.
-  - Se a temperatura exceder o limite máximo, ativa os exaustores.
-  - Se o tempo limite para atingir a temperatura ideal for excedido, ativa o ar condicionado.
-  - Também ativa o ar condicionado para manter a temperatura dentro da faixa mínima.
-- **💧 Controle de Umidade:**
-
-  - Monitora e controla a umidade do ar, mantendo-a dentro dos níveis ideais.
-  - Se a umidade estiver acima do limite, o sistema ativa o ar condicionado no modo desumidificação.
-- **🐟 Sistema de Aquaponia:**
-
-  - Gerencia as bombas de água, alternando entre duas bombas caso uma falhe, garantindo o funcionamento do sistema de aquaponia.
-  - Utiliza sensores de nível para manter o nível da caixa de água, acionando um solenoide para reabastecer o nível caso necessário.
-- **🌱 Irrigação Automatizada:**
-
-  - Controla solenoides para irrigar as plantas em intervalos regulares, com a frequência definida pelo usuário.
-- **💡 Iluminação LED:**
-
-  - Controla LEDs de cultivo e refletores com base em horários pré-definidos, permitindo a simulação de ciclos de luz.
-- **🖥️ Display LCD 16x2 I2C:**
-
-  - Exibe dados de temperatura, umidade e informações sobre o status do sistema, como "ligando exaustores" ou "ligando LEDs no modo apresentação".
-- ## 🎤 Integração com Alexa:
-
-  - Permite comandos de voz para modos de apresentação e controle individual de refletores.
+- **Controle de Temperatura e Umidade:**
+    - Ajusta a temperatura e umidade do ar usando exaustores e ar condicionado (futuramente), mantendo-os dentro de intervalos ideais, levando em consideração também os dados climáticos externos. 
+    - Ex: Em dias frios e úmidos, o sistema prioriza o aquecimento em detrimento da redução da umidade para proteger os peixes do sistema de aquaponia.
+- **Sistema de Aquaponia:**
+    - Gerencia automaticamente as bombas de água, alternando entre duas bombas para garantir o funcionamento contínuo do sistema de aquaponia, mesmo em caso de falha de uma das bombas.
+- **Irrigação Automatizada:**
+    - Irriga as plantas secundarias em intervalos regulares, com a frequência definida pelo usuário.
+- **Iluminação LED Inteligente:**
+    - Simula ciclos de luz natural, ligando e desligando os LEDs de cultivo e refletores em horários pré-definidos.
+    - Permite ajustes finos na intensidade e espectro de luz para otimizar o crescimento das plantas (implementação futura).
+- **Interface Intuitiva:**
+    - Exibe dados de temperatura, umidade e informações sobre o status do sistema em um display LCD 16x2.
+- **Integração com Alexa:**
+    - Permite o controle por voz de dispositivos específicos, como:
+        - Bomba d'água (ligar/desligar e modo automático)
+        - Exaustores (ligar/desligar e modo automático)
+        - Iluminação (ligar/desligar e modo automático)
+        - Refletor central
+        - Lâmpadas auxiliares
 
 ## Tecnologias Utilizadas 🛠️
 
-- **Hardware:**
-  - ESP32
-  - Sensores de temperatura e umidade DHT11
-  - Bomba de água e sensores de fluxo
-  - Solenoides para manter o nível da caixa de água e para controle da irrigação
-  - LEDs de cultivo e refletores acionados por relés
-  - CI Expansor de portas 74HC595
-  - LCD 16x2 I2C
+**Hardware:**
 
-- **Software:**
-  - Arduino (C, C++)
-  - PlatformIO no VSCode
+- ESP32
+- Sensor de temperatura e umidade DHT11
+- Bombas de água
+- Sensor de fluxo de água
+- Solenoides
+- LEDs de cultivo
+- Refletores
+- CI Expansor de portas 74HC595
+- LCD 16x2 I2C
+
+**Software:**
+
+- Arduino (C, C++)
+- PlatformIO
+- Visual Studio Code
+- Bibliotecas:
+    - DHT
+    - CronOut
+    - fauxmoESP
+    - WiFi
+    - NTPClient
+    - WiFiUdp
+    - HTTPClient
+    - Arduino_JSON
+    - Thread
+    - LCD (customizada)
 
 ## Instalação 📦
 
 1. Clone o repositório:
    ```bash
    git clone https://github.com/gustavors1608/BioControl.git
-   
-2. Abra o projeto no VSCode com o PlatformIO instalado.
-
-3. Conecte os componentes de hardware e configure no programa os pinos do mesmo.
-
-4. Compile e carregue o código no ESP32.
+   ```
+2. Abra o projeto no Visual Studio Code com a extensão PlatformIO instalada.
+3. Conecte os componentes de hardware conforme o esquema de ligação e configure os pinos correspondentes no código.
+4. Compile e carregue o código para o ESP32.
 
 ## Uso 🚀
-- Configure os parâmetros no código conforme suas necessidades (temperaturas ideais, horários de iluminação, etc.).
-- Utilize o display LCD para monitorar o status do sistema.
-- Comandos de voz via Alexa podem ser configurados no app da mesma para modos de apresentação e controle de refletores de modo individual.
+
+- Configure os parâmetros no código, como temperaturas ideais, horários de iluminação e frequência de irrigação.
+- Utilize o display LCD para monitorar os dados e o estado do sistema.
+- Controle as funcionalidades através de comandos de voz com a Alexa.
 
 ## Próximos Passos ⏭️
 
-- Integração com API externa para monitoramento e controle remoto.
-- Adicionar comandos de voz via Alexa para controle de modos e funcionalidades.
-- Aprimorar a interface do LCD com barra de progresso para a bomba de água.
-- Criar diagrama de hardware detalhado.
+- retirar codigo inutilizado
+- sistemas de segurança contra travamentos ou erros em cascata
+- funções de simulacao de clima (alvos de temperatura e umidade, talvez PID)
+- melhorar controle de exaustores, deixando funcao de controle de temp com funcionamento em harmonia com umidade local e externa
 
 ## Contribuições 🤝
-Contribuições são bem-vindas! Por favor, faça um fork do repositório e envie um pull request com suas melhorias.
+
+Contribuições são bem-vindas! Faça um fork do repositório, implemente suas melhorias e envie um pull request.
 
 ## Licença 📄
+
 Este projeto está licenciado sob a Licença MIT. Veja o arquivo LICENSE para mais detalhes.
 
 ## Diagramas e Esquemas 🖼️
-Em breve ...
 
-## Contato 📧
-Para mais informações, entre em contato com EcoNext@sejafasa.com.br
+Em breve...
