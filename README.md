@@ -89,6 +89,7 @@ O sistema é especialmente útil para ambientes educacionais, permitindo que alu
 - sistemas de segurança contra travamentos ou erros em cascata
 - funções de simulacao de clima (alvos de temperatura e umidade, talvez PID)
 - melhorar controle de exaustores, deixando funcao de controle de temp com funcionamento em harmonia com umidade local e externa
+- adicionar datalogger no formato csv em um cartão sd: horario, temperatura interna, umidade externa, umidade interna, status dos exaustores, status bomba, status luz, status clima externo (chuva, sol, nublado, neve, pedra, meteoro, etc...)
 
 ## Contribuições 🤝
 
